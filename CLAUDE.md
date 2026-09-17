@@ -1,4 +1,4 @@
-# njfdCRH1A.github.io 项目规范指南
+# CRH1A-A-1186.github.io 项目规范指南
 
 ## 1. 编辑纪律
 
@@ -82,7 +82,7 @@ Block C: footer 页脚 (行 111-113) → 确认 → Edit
 ## 4. 文件结构约束
 
 ```
-njfdCRH1A.github.io/
+CRH1A-A-1186.github.io/
 ├── index.html              # 首页（唯一入口）
 ├── BVE.html                # BVE 资源页
 ├── dcs.html                # DCS World 页

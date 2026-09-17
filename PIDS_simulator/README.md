@@ -2,7 +2,7 @@
 
 使用100%vibe coding制作的纯前端的地铁乘客信息系统（PIDS）显示屏模拟器。在浏览器中模拟地铁车厢内 LCD 显示屏的线路图、到站信息和实时运行状态。
 
-> **在线体验**: 访问 [njfdCRH1A.github.io](https://njfdCRH1A.github.io) 并导航至 PIDS 模拟器页面
+> **在线体验**: 访问 [crh1a-a-1186.github.io](https://crh1a-a-1186.github.io) 并导航至 PIDS 模拟器页面
 
 ## 功能概览
 
