@@ -1,0 +1,3 @@
+[submodule "PIDS_simulator"]
+	path = PIDS_simulator
+	url = https://github.com/njfdCRH1A/PIDS_simulator.git
