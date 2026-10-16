@@ -345,7 +345,7 @@ node tools/test-all.mjs --only=verify,verify-islands     # 只跑其中几个
 
 ## 授权与致谢
 
-- 玩法与原版代码结构来自 [pref-pack / 都道府県ゲーム](https://sns.dopagamelab.com/pref-pack/)（dopagamelab）
+- 玩法与原版代码结构来自 [pref-pack / 都道府県ゲーム](https://sns.dopagamelab.com/pref-pack/)，作者 dopagamelab（X: [@masato_24kw](https://x.com/masato_24kw)）
 - [matter-js](https://github.com/liabru/matter-js) 0.19.0，MIT
 - [poly-decomp.js](https://github.com/schteppe/poly-decomp.js) 0.3.0，MIT
 - 省级边界数据来自 DataV.GeoAtlas

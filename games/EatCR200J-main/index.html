@@ -23,7 +23,7 @@
             <div id="GameScoreLayer-score" style="margin:10px 0;">得分</div>
             <div id="GameScoreLayer-bast">最佳</div>
             <button type="button" class="btn btn-secondary btn-lg" onclick="replayBtn()">重来</button>
-            <button type="button" class="btn btn-secondary btn-lg" onclick="window.location.href='https://github.com/arcxingye/EatKano'">开源</button>
+            <button type="button" class="btn btn-secondary btn-lg" onclick="window.location.href='https://github.com/arcxingye/EatKano'">原作 EatKano</button>
         </div>
     </div>
     </div>
@@ -36,10 +36,21 @@
                     从最底下CR200J（难视）开始<br />
                     看看你20秒能多少分<br />
                     可以用D, F, J, K操作<br />
+                    <span style="font-size:.75em;line-height:1.6em;">默认 20 秒，点错就结束；练习模式点错不结束</span><br />
                 </div>
                 <br />
                 <div id="btn_group" style="display: block;">
                     <button type="button" id="ready-btn" class="btn btn-primary loading btn-lg">点击开始</button>
+                    <div class="dropdown" style="margin:0 0 0 0;">
+                        <button type="button" id="mode" class="btn btn-secondary btn-lg" style="width:100%;"
+                                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">普通模式</button>
+                        <div class="dropdown-menu" aria-labelledby="mode" style="width:100%;">
+                            <a class="dropdown-item" href="javascript:void(0);" id="mode-1">普通模式（限时）</a>
+                            <a class="dropdown-item" href="javascript:void(0);" id="mode-2">无尽模式（比 CPS）</a>
+                            <a class="dropdown-item" href="javascript:void(0);" id="mode-3">练习模式（失误不结束）</a>
+                        </div>
+                    </div>
+                    <button type="button" id="setting-btn" class="btn btn-secondary btn-lg" style="width:100%;">游戏设置</button>
                 </div>
                 <div id="setting" style="display: none;">
                     <div class="input-group mb-3">
@@ -54,6 +65,19 @@
                         </div>
                         <input type="text" id="message" class="form-control" maxlength=50 placeholder="禁广告/脏话(本项可不填)" aria-label="username" aria-describedby="basic-addon1">
                     </div>
+                    <div class="input-group mb-3">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">按键</span>
+                        </div>
+                        <input type="text" id="keyboard" class="form-control" maxlength=4 placeholder="默认为 DFJK" aria-label="keyboard">
+                    </div>
+                    <div class="input-group mb-3">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">时间</span>
+                        </div>
+                        <input type="text" id="gameTime" class="form-control" maxlength=4 placeholder="默认为 20 秒" aria-label="gameTime">
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-lg" id="sound">音效: 开</button>
                     <button type="button" class="btn btn-secondary btn-lg" onclick="show_btn();save_cookie();">完成</button>
                 </div>
             </div>

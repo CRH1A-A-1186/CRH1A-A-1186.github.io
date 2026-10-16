@@ -1,3 +1,5 @@
+// 三种模式，与原版一致：普通限时 / 无尽（比 CPS）/ 练习（失误不结束）
+var MODE_NORMAL = 1, MODE_ENDLESS = 2, MODE_PRACTICE = 3;
 var isDesktop = navigator['userAgent'].match(/(ipad|iphone|ipod|android|windows phone)/i) ? false : true;
 var fontunit = isDesktop ? 20 : ((window.innerWidth > window.innerHeight ? window.innerHeight : window.innerWidth) / 320) * 10;
 document.write('<style type="text/css">' +
@@ -44,6 +46,75 @@ function init() {
     btn.onclick = function () {
         closeWelcomeLayer();
     }
+    // 模式选择
+    mode = getMode();
+    var modeLabels = { 1: '普通模式', 2: '无尽模式', 3: '练习模式' };
+    document.getElementById('mode').textContent = modeLabels[mode];
+    [1, 2, 3].forEach(function (m) {
+        var el = document.getElementById('mode-' + m);
+        if (el) el.onclick = function () {
+            mode = m;
+            cookie('gameMode', m, 100);
+            document.getElementById('mode').textContent = modeLabels[m];
+        };
+    });
+    // 音效开关
+    soundMode = getSoundMode();
+    updateSoundBtn();
+    var snd = document.getElementById('sound');
+    if (snd) snd.onclick = function () {
+        soundMode = soundMode === 'on' ? 'off' : 'on';
+        cookie('soundMode', soundMode, 100);
+        updateSoundBtn();
+    };
+    // 设置面板：原版的设置入口，这里恢复成可打开
+    var sb = document.getElementById('setting-btn');
+    if (sb) sb.onclick = show_setting;
+    initSetting();
+}
+
+function getMode() {
+    return cookie('gameMode') ? parseInt(cookie('gameMode')) : MODE_NORMAL;
+}
+function getSoundMode() {
+    return cookie('soundMode') ? cookie('soundMode') : 'on';
+}
+function updateSoundBtn() {
+    var s = document.getElementById('sound');
+    if (s) s.textContent = soundMode === 'on' ? '音效: 开' : '音效: 关';
+}
+// 播放音效，遵守开关
+function playSound(id) {
+    if (soundMode === 'on') createjs.Sound.play(id);
+}
+// 读回设置：时长、改键、标题
+function initSetting() {
+    var t = cookie('gameTime');
+    if (t && parseInt(t) > 0) {
+        _gameSettingNum = parseInt(t);
+        var gt = document.getElementById('gameTime');
+        if (gt) gt.value = t;
+    }
+    var kb = cookie('keyboard');
+    if (kb) {
+        var k = kb.toString().toLowerCase();
+        var el = document.getElementById('keyboard');
+        if (el) el.value = k;
+        if (k.length >= 4) {
+            keyMap = {};
+            keyMap[k.charAt(0)] = 1;
+            keyMap[k.charAt(1)] = 2;
+            keyMap[k.charAt(2)] = 3;
+            keyMap[k.charAt(3)] = 4;
+        }
+    }
+    var title = cookie('title');
+    if (title) document.title = title;
+    gameRestart();
+}
+var keyMap = { 'd': 1, 'f': 2, 'j': 3, 'k': 4 };
+function modeName() {
+    return mode === MODE_NORMAL ? '普通模式' : (mode === MODE_ENDLESS ? '无尽模式' : '练习模式');
 }
 
 function winOpen() {
@@ -99,6 +170,12 @@ var _gameBBList = [],
     _gameOver = false,
     _gameStart = false,
     _gameTime, _gameTimeNum, _gameScore;
+var _gameSettingNum = 20;      // 一局时长（秒），可在设置里改
+var _gameStartTime = 0;        // 已计时秒数，用于 CPS 的起步判断
+var _date1;                    // 开始时刻，用于时间校验
+var mode = 1;                  // 当前模式
+var soundMode = 'on';          // 音效开关
+var welcomeLayerClosed = false;
 
 function gameInit() {
     createjs.Sound.registerSound({
@@ -122,7 +199,9 @@ function gameRestart() {
     _gameScore = 0;
     _gameOver = false;
     _gameStart = false;
-    _gameTimeNum = 20;
+    _gameTimeNum = _gameSettingNum;
+    _gameStartTime = 0;
+    _gameStartDatetime = 0;
     GameTimeLayer.innerHTML = creatTimeText(_gameTimeNum);
     countBlockSize();
     refreshGameLayer(GameLayer[0]);
@@ -131,16 +210,26 @@ function gameRestart() {
 
 function gameStart() {
     _date1 = new Date();
+    _gameStartDatetime = _date1.getTime();
     _gameStart = true;
     _gameTime = setInterval(gameTime, 1000);
 }
+// 每秒点击数，用于无尽模式和评级（原始实现同样如此）
+function getCPS() {
+    var cps = _gameScore / ((new Date().getTime() - _gameStartDatetime) / 1000);
+    if (isNaN(cps) || cps === Infinity || _gameStartTime < 2) cps = 0;
+    return cps;
+}
 
 function gameOver() {
+    if (_gameOver) return;
     _gameOver = true;
     clearInterval(_gameTime);
+    playSound("end");
+    var cps = getCPS();
     setTimeout(function () {
         GameLayerBG.className = '';
-        showGameScoreLayer();
+        showGameScoreLayer(cps);
     }, 1500);
 }
 
@@ -153,6 +242,8 @@ function encrypt(text){
   }
 
 function SubmitResults() {
+    // 静态托管（GitHub Pages）没有 PHP 后端，排行榜不可用：原版的提交在这里直接跳过
+    return;
     var system = "其他操作系统";
     var area = "异世界";
     if (document.getElementById("username").value) {
@@ -174,13 +265,26 @@ function SubmitResults() {
 
 function gameTime() {
     _gameTimeNum--;
-    if (_gameTimeNum <= 0) {
+    _gameStartTime++;
+    // 只有普通模式会被时间结束；无尽和练习模式一直继续
+    if (mode === MODE_NORMAL && _gameTimeNum <= 0) {
         GameTimeLayer.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;时间到！';
         gameOver();
         GameLayerBG.className += ' flash';
-        createjs.Sound.play("end");
+        playSound("end");
     } else {
+        updatePanel();
+    }
+}
+function updatePanel() {
+    if (_gameOver) return;
+    if (mode === MODE_NORMAL) {
         GameTimeLayer.innerHTML = creatTimeText(_gameTimeNum);
+    } else if (mode === MODE_ENDLESS) {
+        var cps = getCPS();
+        GameTimeLayer.innerHTML = '&nbsp;CPS:' + (cps === 0 ? '计算中' : cps.toFixed(2));
+    } else {
+        GameTimeLayer.innerHTML = '&nbsp;SCORE:' + _gameScore;
     }
 }
 
@@ -252,21 +356,30 @@ function gameTapEvent(e) {
     if (y > touchArea[0] || y < touchArea[1]) {
         return false;
     }
+    // 原版的判定顺序：先看点的就是不是目标格子，再看是否落在目标列
     if ((p.id == tar.id && tar.notEmpty) || (p.cell == 0 && x < blockSize) || (p.cell == 1 && x > blockSize && x < 2 *
-        blockSize) || (p.cell == 2 && x > 2 * blockSize && x < 3 * blockSize) || (p.cell == 3 && x > 3 * blockSize)) {
+            blockSize) || (p.cell == 2 && x > 2 * blockSize && x < 3 * blockSize) || (p.cell == 3 && x > 3 * blockSize)) {
         if (!_gameStart) {
             gameStart();
         }
-        createjs.Sound.play("tap");
+        playSound("tap");
         tar = document.getElementById(p.id);
         tar.className = tar.className.replace(_ttreg, ' tt$1');
         _gameBBListIndex++;
         _gameScore++;
+        updatePanel();
         gameLayerMoveNextRow();
     } else if (_gameStart && !tar.notEmpty) {
-        createjs.Sound.play("err");
-        gameOver();
+        // 点错：练习模式只标一下继续，其它模式直接结束
+        playSound("err");
         tar.className += ' bad';
+        if (mode === MODE_PRACTICE) {
+            setTimeout(function () {
+                tar.className = tar.className.replace(_clearttClsReg, '');
+            }, 500);
+        } else {
+            gameOver();
+        }
     }
     return false;
 }
@@ -290,31 +403,42 @@ function createGameLayer() {
 }
 
 function closeWelcomeLayer() {
+    welcomeLayerClosed = true;
     var l = document.getElementById('welcome');
     l.style.display = 'none';
+    updatePanel();
 }
 
 function showWelcomeLayer() {
+    welcomeLayerClosed = false;
     var l = document.getElementById('welcome');
     l.style.display = 'block';
 }
 
-function showGameScoreLayer() {
+// 这一局的实际耗时没超过 设定时长+3 秒，才算干净的成绩
+function legalDeviationTime() {
+    return deviation_time < (_gameSettingNum + 3) * 1000;
+}
+
+function showGameScoreLayer(cps) {
     var l = document.getElementById('GameScoreLayer');
     var c = document.getElementById(_gameBBList[_gameBBListIndex - 1].id).className.match(_ttreg)[1];
     l.className = l.className.replace(/bgc\d/, 'bgc' + c);
-    document.getElementById('GameScoreLayer-text').innerHTML = shareText(_gameScore);
-    var score_text='得分&nbsp;&nbsp;';
-    score_text+=deviation_time<23000?_gameScore:"<span style='color:red;'>"+_gameScore+"</span>";
-    document.getElementById('GameScoreLayer-score').innerHTML = score_text;
+    document.getElementById('GameScoreLayer-text').innerHTML = shareText(cps);
+    // 无尽模式看 CPS，其它模式看分数；成绩不干净时标红
+    var shown = (mode === MODE_ENDLESS ? cps.toFixed(2) : _gameScore);
+    var red = legalDeviationTime() || mode !== MODE_NORMAL ? '' : " style='color:red;'";
+    document.getElementById('GameScoreLayer-score').innerHTML =
+        (mode === MODE_ENDLESS ? 'CPS&nbsp;&nbsp;' : '得分&nbsp;&nbsp;') + '<span' + red + '>' + shown + '</span>';
+    // 练习模式不计入最佳成绩（原版也是如此）
     var bast = cookie('bast-score');
-    if(deviation_time<23000){
+    if (mode !== MODE_PRACTICE && legalDeviationTime()) {
         if (!bast || _gameScore > bast) {
             bast = _gameScore;
             cookie('bast-score', bast, 100);
         }
     }
-    document.getElementById('GameScoreLayer-bast').innerHTML = '最佳&nbsp;&nbsp;' + bast;
+    document.getElementById('GameScoreLayer-bast').innerHTML = '最佳&nbsp;&nbsp;' + (bast || 0);
     l.style.display = 'block';
 }
 
@@ -334,17 +458,18 @@ function backBtn() {
     showWelcomeLayer();
 }
 
-function shareText(score) {
+// 评语按 CPS 分档（原版也是按 CPS），而不是按总分：这样不同时长的成绩可比
+function shareText(cps) {
     var date2 = new Date();
-    deviation_time = (date2.getTime() - _date1.getTime())
-    if (deviation_time > 23000) {
-        return '倒计时多了' + ((deviation_time / 1000) - 20).toFixed(2) + "s";
+    deviation_time = (date2.getTime() - _date1.getTime());
+    if (!legalDeviationTime()) {
+        // 倒计时被改过：如实说明多了多少
+        return '倒计时多了' + ((deviation_time / 1000) - _gameSettingNum).toFixed(2) + 's';
     }
-    SubmitResults();
-    if (score <= 49) return '试着好好练一下？';
-    if (score <= 99) return 'TCL';
-    if (score <= 149) return 'TQL';
-    if (score <= 199) return '您';
+    if (cps <= 5) return '试着好好练一下？';
+    if (cps <= 8) return 'TCL';
+    if (cps <= 10) return 'TQL';
+    if (cps <= 15) return '您';
     return '人？';
 }
 
@@ -378,6 +503,10 @@ function cookie(name, value, time) {
     return data;
 }
 document.write(createGameLayer());
+// 模式要在第一次 gameRestart 之前读出来（init 里还会再同步一次界面）
+mode = getMode();
+soundMode = getSoundMode();
+var _gameStartDatetime = 0;
 
 
 function show_btn() {
@@ -389,8 +518,12 @@ function show_setting() {
     document.getElementById("setting").style.display = "block"
 }
 function save_cookie() {
-    cookie('username', document.getElementById("username").value, 100);
-    cookie('message', document.getElementById("message").value, 100);
+    var settings = ['username', 'message', 'title', 'keyboard', 'gameTime'];
+    for (var i = 0; i < settings.length; i++) {
+        var el = document.getElementById(settings[i]);
+        if (el && el.value) cookie(settings[i], el.value.toString(), 100);
+    }
+    initSetting();
 }
 function isnull(val) {
     var str = val.replace(/(^\s*)|(\s*$)/g, '');
@@ -410,6 +543,9 @@ function goRank() {
 }
 
 function click(index) {
+    if (!welcomeLayerClosed) {
+        return;
+    }
     let p = _gameBBList[_gameBBListIndex];
     let base = parseInt(document.getElementById(p.id).getAttribute("num")) - p.cell;
     let num = base + index - 1;
@@ -425,15 +561,11 @@ function click(index) {
     gameTapEvent(fakeEvent)
 }
 
-document.onkeydown = function(e) {
-    const map = {
-        'd': 1, 'f': 2, 'j': 3, 'k': 4
+document.onkeydown = function (e) {
+    var key = (e.key || '').toLowerCase();
+    if (Object.keys(keyMap).indexOf(key) !== -1) {
+        click(keyMap[key]);
     }
-    let key = e.key.toLowerCase();
-
-    if (Object.keys(map).indexOf(key) !== -1) {
-        click(map[key])
-    }
-}
+};
 
 console.log("不修改，好嘛？乱传又有什么用呢？(ˉ▽ˉ；)...")
