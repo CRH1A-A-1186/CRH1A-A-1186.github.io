@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>中国省份游戏 - 把 34 个省级行政区拼成一幅中国地图</title>
+<meta name="description" content="把省级行政区放进箱子里的物理拼图。相邻的省份会连成一片，摇一摇让箱子晃动，溢出箱口就结束。34 个省级行政区全部连成一幅中国地图就进入下一局。">
+<meta property="og:title" content="中国省份游戏">
+<meta property="og:description" content="把 34 个省级行政区装进箱子，相邻的省份会连成一片，最后拼成一幅完整的中国地图。">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#e9e4da">
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #e9e4da;
+    --paper: #f4f1ea;
+    --card: #fffdf7;
+    --ink: #2f3a44;
+    --muted: #66717b;
+    --box: #6b8fa8;
+    --accent: #4f7591;
+    --bad: #c2453a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  html { touch-action: manipulation; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  button, a { font: inherit; }
+  .app {
+    height: 100%;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: max(6px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+  }
+  .stage { position: relative; flex: none; container-type: inline-size; }
+  #cv {
+    display: block;
+    touch-action: none;
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .14);
+    background: var(--paper);
+    cursor: crosshair;
+  }
+  .controls { flex: none; display: flex; gap: 8px; touch-action: none; }
+  .btn {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 56px; padding: 8px 12px;
+    border: 2px solid var(--ink); border-radius: 14px;
+    background: var(--ink); color: var(--paper);
+    font-size: 17px; font-weight: 700; letter-spacing: .04em;
+    cursor: pointer; text-decoration: none;
+    touch-action: manipulation;
+    transition: transform .08s ease, opacity .15s ease;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn.ghost { background: var(--card); color: var(--ink); }
+  .btn:disabled, .btn.wait { opacity: .4; cursor: default; transform: none; }
+  .btn.wait { pointer-events: none; }
+  .btn svg { flex: none; }
+  .btn .share-icon { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .btn .share-icon .solid { fill: currentColor; stroke: none; }
+  .btn .shake-icon { width: 30px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .btn .shake-icon .solid { fill: currentColor; stroke: none; }
+  .btn.reset { flex: 0 0 36%; gap: 6px; padding: 8px 6px; }
+  .btn.reset.armed { border-color: var(--bad); color: var(--bad); font-size: 14px; letter-spacing: 0; }
+  .btn .reset-icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .controls .btn { touch-action: none; }
+  [hidden] { display: none !important; }
+
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px;
+    border-radius: 14px;
+    pointer-events: none;
+  }
+  .overlay > * { pointer-events: auto; }
+  .card {
+    width: 100%;
+    background: rgba(255, 253, 247, .94);
+    border: 2px solid var(--ink);
+    border-radius: 16px;
+    padding: 14px 14px 16px;
+    text-align: center;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+  }
+  #title { justify-content: center; background: rgba(244, 241, 234, .55); }
+  #title h1 { margin: 2px 0 6px; font-size: 30px; font-size: min(30px, 9.4cqw); letter-spacing: .04em; line-height: 1.2; white-space: nowrap; }
+  #title .lead { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+  #hero { display: block; width: 100%; height: auto; margin: 0 auto 6px; }
+  .rules { list-style: none; margin: 0 0 14px; padding: 0; text-align: left; font-size: 14px; line-height: 1.5; }
+  .rules li { position: relative; padding: 3px 0 3px 22px; }
+  #start { width: 100%; }
+  .rules li::before {
+    content: ""; position: absolute; left: 4px; top: .62em;
+    width: 9px; height: 9px; border-radius: 3px; background: var(--box);
+  }
+  #result { justify-content: flex-start; }
+  #result .card { padding: 12px 12px 12px; cursor: pointer; }
+  .r-tap { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  .r-head { margin: 0 0 8px; font-size: 20px; font-weight: 800; line-height: 1.3; }
+  .r-head.ng { color: var(--bad); }
+  .r-stats { display: flex; justify-content: center; gap: 18px; margin: 0 0 6px; }
+  .r-stats div { display: flex; align-items: baseline; gap: 3px; }
+  .r-stats b { font-size: 28px; line-height: 1; }
+  .r-stats span { font-size: 13px; color: var(--muted); }
+  .r-line { margin: 4px 0 0; font-size: 13px; line-height: 1.5; }
+  .r-line b { font-size: 15px; }
+  .r-line .muted { color: var(--muted); }
+  .credit { margin: 6px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
+  .credit a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(79, 117, 145, .45); }
+  /* the box's bottom edge sits ~1.8% above the canvas bottom, so this strip is below the box
+     and above the button row: it covers no provinces and no buttons */
+  #toast {
+    position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%);
+    max-width: calc(100% - 8px);
+    padding: 7px 13px; border-radius: 9px;
+    background: rgba(47, 58, 68, .92); color: var(--paper);
+    font-size: 12.5px; line-height: 1.3; text-align: center;
+    white-space: nowrap;
+    pointer-events: none; opacity: 0; transition: opacity .18s ease;
+    z-index: 2;
+  }
+  #toast.show { opacity: 1; }
+  @media (max-height: 700px) {
+    .btn { min-height: 48px; font-size: 15px; }
+    .rules { font-size: 13px; }
+    #title h1 { font-size: min(26px, 8.4cqw); }
+  }
+</style>
+</head>
+<body>
+<main class="app" id="app">
+  <div class="stage" id="stage">
+    <canvas id="cv" aria-label="把省级行政区装进去的箱子。左右移动，松手投放"></canvas>
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <section class="overlay" id="title">
+      <div class="card">
+        <h1>中国省份游戏</h1>
+        <p class="lead">把 34 个省级行政区装进箱子</p>
+        <canvas id="hero" aria-hidden="true"></canvas>
+        <ul class="rules">
+          <li>相邻的省份碰到一起就会连成一片</li>
+          <li>摇一摇让箱子晃动，把积压的省份抖开</li>
+          <li>任何一块冒出箱口就结束</li>
+          <li>34 个省级行政区连成一幅完整的中国地图，就进入下一局</li>
+          <li>京津冀、粤港澳开局就是连在一起的一整块</li>
+          <li>台湾、海南隔着海峡也算相邻，丢在福建、广东旁边就能连上</li>
+        </ul>
+        <button class="btn" id="start" type="button">开始</button>
+        <p class="credit">移植自 <a href="https://sns.dopagamelab.com/pref-pack/" target="_blank" rel="noopener noreferrer">都道府県ゲーム (pref-pack)</a> · by dopagamelab<br>
+          物理引擎 matter-js · 省级边界 DataV.GeoAtlas</p>
+      </div>
+    </section>
+
+    <section class="overlay" id="result" hidden aria-live="polite">
+      <div class="card">
+        <p class="r-head" id="r-head"></p>
+        <div class="r-stats">
+          <div><b id="r-count"></b><span>/ 30 块</span></div>
+          <div><b id="r-score"></b><span>分</span></div>
+        </div>
+        <p class="r-line"><span class="muted">连成的最大一片</span><br><b id="r-big"></b></p>
+        <p class="r-line"><span class="muted">已连成的大区:</span> <span id="r-regions"></span></p>
+        <p class="r-line" id="r-japan" hidden></p>
+        <p class="r-tap">点一下 再来一局</p>
+        <p class="credit">移植自 <a href="https://sns.dopagamelab.com/pref-pack/" target="_blank" rel="noopener noreferrer">都道府県ゲーム (pref-pack)</a> by dopagamelab</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="controls" id="controls">
+    <button class="btn ghost reset" id="reset" type="button" hidden aria-label="重开一局">
+      <svg class="reset-icon" id="reset-icon" viewBox="0 0 20 20" aria-hidden="true">
+        <path d="M16.5 10a6.5 6.5 0 1 1-2.2-4.9"/>
+        <path d="M15.2 2.2v3.6h-3.6"/>
+      </svg><span id="reset-label">重开一局</span>
+    </button>
+    <button class="btn" id="shuffle" type="button" disabled aria-label="摇一摇（晃动箱子）">
+      <svg class="shake-icon" viewBox="0 0 30 26" aria-hidden="true">
+        <path d="M7 8v14h16V8"/>
+        <path class="solid" d="M10 17.5l3.2-3.6 3.4 2.6-2.3 4.2z"/>
+        <path class="solid" d="M16.4 12.2l3.8.4-.5 3.8-3.7-1.1z"/>
+        <path d="M2.5 11v7M27.5 11v7"/>
+        <path d="M11 3.5l1.6 2M19 3.5l-1.6 2"/>
+      </svg>摇一摇
+    </button>
+    <a class="btn" id="share" href="#" target="_blank" rel="noopener noreferrer" hidden aria-label="分享到微博">
+      <svg class="share-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="18" cy="5.5" r="2.8"/>
+        <circle cx="6" cy="12" r="2.8"/>
+        <circle cx="18" cy="18.5" r="2.8"/>
+        <path d="M8.5 10.6l7-3.7M8.5 13.4l7 3.7"/>
+      </svg>分享
+    </a>
+    <button class="btn ghost" id="retry" type="button" hidden>再来一局</button>
+  </div>
+</main>
+<script src="game.js"></script>
+</body>
+</html>

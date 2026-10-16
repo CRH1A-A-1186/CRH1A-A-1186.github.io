@@ -98,7 +98,7 @@ CRH1A-A-1186.github.io/
 ├── routemap/               # 线路图资源
 │   └── SO_TY/              # 相铁/东急直通图
 ├── PIDS_simulator/         # PIDS 模拟器子项目
-├── EatCR200J-main/         # 小游戏子项目
+├── games/                  # 小游戏合集（EatCR200J-main/、china-pack/）
 ├── CLAUDE.md               # 本文件
 └── README.md               # 项目说明
 ```
@@ -106,7 +106,7 @@ CRH1A-A-1186.github.io/
 - **导航菜单在 6 个 HTML 文件中有副本**——改导航时全部同步更新
 - 新建 HTML 页面需先讨论
 - 新建资源文件放入对应类型目录（图片→`images/`，音频→`running/`，字体→`fonts/`）
-- 子项目（`PIDS_simulator/`、`EatCR200J-main/`）有各自的独立规范
+- 子项目（`PIDS_simulator/`、`games/`）有各自的独立规范
 - 预览截图等临时文件放项目根目录
 
 ---

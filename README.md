@@ -14,7 +14,7 @@
 | 线路图 | `routemap.html` | 相铁 / JR / 东急直通系统实际走向图，可下载 PNG |
 | 走行音 | `running.html` | 北京地铁 1 / 4 / 7 / 10 / 14 / 19 号线、昌平线共 8 段走行音 |
 | PIDS 模拟器 | `PIDS_simulator/index.html` | 地铁乘客信息显示屏模拟器（git 子模块，见下） |
-| 小游戏 | `EatCR200J-main/index.html` | 网页小游戏「吃掉 CR200J」 |
+| 小游戏 | `games/index.html` | 小游戏合集：吃掉 CR200J、中国省份游戏 |
 
 导航菜单在 5 个主站页面里各有一份副本，改动时需同步更新。
 
@@ -34,7 +34,10 @@ CRH1A-A-1186.github.io/
 ├── running/                # 走行音 MP3（8 个，约 59 MB，仓库体积大头）
 ├── routemap/               # 线路图资源（SO_TY/ 相铁·东急直通图）
 ├── PIDS_simulator/         # PIDS 模拟器 —— git 子模块，不在本库内
-├── EatCR200J-main/         # 网页小游戏（改编自 EatKano）
+├── games/                  # 网页小游戏合集
+│   ├── index.html          # 小游戏入口页
+│   ├── EatCR200J-main/     # 吃掉 CR200J（改编自 EatKano）
+│   └── china-pack/         # 中国省份游戏（移植自 都道府県ゲーム）
 ├── .gitmodules             # 子模块声明
 ├── CLAUDE.md               # 项目规范：编辑纪律、CSS 规范、验收方式
 └── README.md
@@ -106,6 +109,6 @@ python -m http.server 8000   # 然后访问 http://localhost:8000/
 
 - 站点内容版权归作者所有。
 - `PIDS_simulator/` 遵循其自身仓库的 [LICENSE](https://github.com/CRH1A-A-1186/PIDS_simulator/blob/master/LICENSE)。
-- `EatCR200J-main/` 改编自 [arcxingye/EatKano](https://github.com/arcxingye/EatKano)，请保留原作的署名与跳转链接；CR200J 车头图像来自 <http://trainfrontview.net/>。
+- `games/EatCR200J-main/` 改编自 [arcxingye/EatKano](https://github.com/arcxingye/EatKano)，请保留原作的署名与跳转链接；CR200J 车头图像来自 <http://trainfrontview.net/>。
 - 编辑与验收规范见 `CLAUDE.md`。
 - 找我：Bilibili（推特基本不用……）。
