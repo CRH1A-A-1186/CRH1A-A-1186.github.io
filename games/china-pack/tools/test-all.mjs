@@ -17,6 +17,7 @@ const ALL = [
   { name: 'verify', time: 'few s', what: 'pack, adjacency, regions, merge rules, difficulty' },
   { name: 'verify-deadlock', time: 'few s', what: '京津冀 / 粤港澳 grouping' },
   { name: 'verify-islands', time: '~1 min', what: 'strait crossings actually merge' },
+  { name: 'verify-shake', time: 'few s', what: 'a shake never leaks into the next round' },
   { name: 'verify-testmode', time: '~1 min', what: 'ordered deal + size knobs' },
   { name: 'verify-finale', time: '~10 s', what: 'finale and round advance' },
   { name: 'verify-winnable', time: '~1 min', what: 'how far a mergeable chain reaches' },

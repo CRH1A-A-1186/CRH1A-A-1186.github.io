@@ -93,10 +93,33 @@ if (provinces.length !== 34) throw new Error(`expected 34 provinces, got ${provi
 console.log('provinces:', provinces.length);
 
 // ---- pick rings: the main landmass plus nearby islands; drop far-flung islets ----
-// Hainan's entry also carries the South China Sea islets down to 7 N, which would blow the
-// piece's bounding box up by 1500 km, so islands must sit near the province's main landmass.
+// Hainan's entry also carries the South China Sea islets, which would blow the piece's bounding
+// box up by ~1500 km, so by default islands must sit near the province's main landmass.
 const ISLAND_MIN_KM2 = 400;              // keep Zhoushan/Chongming/Hainan-scale islands
 const ISLAND_MAX_DEG = 4.0;              // and only within ~450 km of it
+
+// 三沙市 is administered by 海南 and consists entirely of the South China Sea islands, so 海南 has to
+// keep them or the province is missing a city. Two things decide which pieces qualify:
+//
+//  * not everything in this entry is land. It also carries reefs and shoals encoded as polygons
+//    (曾母暗沙, 万安滩 ...) plus the nine-dash segments, some of them thousands of km2. Real islands
+//    in the South China Sea top out at ~4.6 km2 (太平岛), so a 40 km2 ceiling keeps the actual
+//    islands and drops the reef polygons, which should not be drawn as territory anyway.
+//  * at their true positions the islands are sub-pixel at the game's scale and stretch the piece
+//    over 53% of the box height while showing almost nothing - invisible geometry that still
+//    collides. So 三沙 is drawn as an inset just south of the main island, keeping the relative
+//    arrangement of the groups, exactly as paper maps show it. The gap between the two is real,
+//    so it reads as an inset rather than as continuous land.
+const SANDSHA_MIN_KM2 = 3;
+const SANDSHA_MAX_KM2 = 40;
+const SANDSHA_INSET_GAP = 90;            // km between the main island and the inset
+const SANDSHA_INSET_WIDTH = 210;         // km, about the width of the main island
+// The real islands are 1-4.6 km2, i.e. under a third of a game unit wide - they would render as
+// nothing at all. Maps solve this by drawing an island symbol at a legible minimum size, so each
+// island is grown about its centre until its longer side reaches this. The three groups stay
+// distinguishable; what is lost is the exact island outline, which is below the map's resolution.
+const SANDSHA_MIN_SYMBOL_KM = 14;
+
 for (const p of provinces) {
   const rings = [];
   for (const poly of p.polys) {
@@ -108,13 +131,58 @@ for (const p of provinces) {
   const main = rings[0];
   const mc = polyCentroid(lonLatRing(main.ring));
   const keep = [main];
+  const wantSansha = p.code === 460000;
+  const sansha = [];
   for (let i = 1; i < rings.length; i++) {
     const r = rings[i];
-    if (r.km2 < ISLAND_MIN_KM2) continue;
     const [cx, cy] = polyCentroid(lonLatRing(r.ring));
+    const dLat = Math.abs(cy - mc[1]) / KY;            // degrees of latitude from the main island
     const dDeg = Math.hypot(cx - mc[0], cy - mc[1]) / KX;
+    if (wantSansha && dDeg > ISLAND_MAX_DEG && r.km2 >= SANDSHA_MIN_KM2 && r.km2 <= SANDSHA_MAX_KM2) {
+      sansha.push(r);                                  // collected, then placed as an inset
+      continue;
+    }
+    if (r.km2 < ISLAND_MIN_KM2) continue;              // ordinary island filter
     if (dDeg > ISLAND_MAX_DEG) continue;
     keep.push(r);
+  }
+
+  if (wantSansha && sansha.length) {
+    // map the 三沙 pieces into a box just south of the main island, preserving their arrangement
+    const toKm = (ring) => ring.map(([lon, lat]) => [lon * KX, -lat * KY]);
+    const toLonLat = (ring) => ring.map(([x, y]) => [x / KX, -y / KY]);
+    const mainKm = toKm(main.ring);
+    const mx0 = Math.min(...mainKm.map((q) => q[0])), mx1 = Math.max(...mainKm.map((q) => q[0]));
+    const my1 = Math.max(...mainKm.map((q) => q[1]));           // southern edge (y grows south)
+    const sanshaKm = sansha.map((r) => toKm(r.ring));
+    const sx0 = Math.min(...sanshaKm.flatMap((r) => r.map((q) => q[0])));
+    const sx1 = Math.max(...sanshaKm.flatMap((r) => r.map((q) => q[0])));
+    const sy0 = Math.min(...sanshaKm.flatMap((r) => r.map((q) => q[1])));
+    const sy1 = Math.max(...sanshaKm.flatMap((r) => r.map((q) => q[1])));
+    const w = sx1 - sx0, h = sy1 - sy0;
+    const k = Math.min(SANDSHA_INSET_WIDTH / w, (SANDSHA_INSET_WIDTH * 1.6) / h);   // fit, keep aspect
+    const targetW = w * k;
+    const ox = (mx0 + mx1) / 2 - targetW / 2 - sx0 * k;         // centre under the main island
+    const oy = my1 + SANDSHA_INSET_GAP - sy0 * k;              // just below it
+    sansha.forEach((r, i) => {
+      const moved = sanshaKm[i].map(([x, y]) => [x * k + ox, y * k + oy]);
+      // grow to a legible symbol size (seeded from the group's arrangement, so it stays put)
+      const gx = moved.map((q) => q[0]), gy = moved.map((q) => q[1]);
+      const gw = Math.max(...gx) - Math.min(...gx), gh = Math.max(...gy) - Math.min(...gy);
+      const longer = Math.max(gw, gh);
+      if (longer < SANDSHA_MIN_SYMBOL_KM && longer > 0.01) {
+        const mul = SANDSHA_MIN_SYMBOL_KM / longer;
+        const ccx = (Math.min(...gx) + Math.max(...gx)) / 2;
+        const ccy = (Math.min(...gy) + Math.max(...gy)) / 2;
+        for (let q = 0; q < moved.length; q++) {
+          moved[q][0] = ccx + (moved[q][0] - ccx) * mul;
+          moved[q][1] = ccy + (moved[q][1] - ccy) * mul;
+        }
+      }
+      keep.push({ ring: toLonLat(moved), km2: r.km2 });
+    });
+    console.log(`  海南: ${sansha.length} 三沙 岛 drawn as an inset ${Math.round(targetW)} km wide ` +
+      `(${(k * 100).toFixed(0)}% of true scale), ${Math.round(h * k)} km tall`);
   }
   p.rings = keep;
   p.km2 = keep.reduce((a, r) => a + r.km2, 0);

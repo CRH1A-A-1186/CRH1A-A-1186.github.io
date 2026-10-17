@@ -58,7 +58,7 @@ const BIAS = 0.6;                       // 优先抽取与箱内已有省份相�
 const LABEL_MIN_PX = 9.5;               // 屏幕上最小的标签字号（css px）
 
 const HASHTAG = '中国省份游戏';
-const SHARE_URL = 'https://crh1a-a-1186.github.io/games/china-pack/';   // 线上地址，分享时带上
+const SHARE_URL = 'https://crh1a-a-1186.github.io/games/china-pack/';                   // 留空则分享链接不带网址
 
 const REGIONS = REGION_DEFS.map((r) => ({ ...r, from: r.codes[0], to: r.codes[r.codes.length - 1] }));
 const C_PAPER = '#f4f1ea', C_BOX = '#6b8fa8', C_INK = '#3b4752';
@@ -349,7 +349,7 @@ function resetWorld() {
   hoverX = W / 2; hoverY = 0; aiming = false;
   dropped = 0; dealt = 0; lastDropAt = -1e9; score = 0; completed = new Set(); timeUpAt = null;
   round = 1; chinaCount = 0; bestEver = null; finale = null; chinaShot = null;
-  shakeStart = null; shakeX = 0; kicked2 = true; shaking = false;
+  resetShake();          // 重开一局时如果正摇着，墙要回到原位
   popups = []; banners = []; endInfo = null; lastFinish = null;
 }
 
@@ -582,6 +582,20 @@ function merge(a, b) {
   if (n === TOTAL) startFinale(nb);
 }
 
+// 结束摇动并把墙放回原位。
+// 摇动是直接挪墙实现的（updateShake 每帧把左/右墙和地板按 shakeX 偏移），所以任何"中途打断摇动"
+// 的地方（完成演出、重开一局）都必须同时把 shakeX 归零并把墙摆回去，否则箱子会一直偏一个振幅，
+// 下一局丢下的方块刚进场就被偏掉的墙推到边上。
+function resetShake() {
+  shakeStart = null;
+  shakeX = 0;
+  shaking = false;
+  kicked2 = true;
+  Body.setPosition(walls.left, { x: WALL_X0[0], y: walls.left.position.y }, true);
+  Body.setPosition(walls.right, { x: WALL_X0[1], y: walls.right.position.y }, true);
+  Body.setPosition(walls.floor, { x: W / 2, y: walls.floor.position.y }, true);
+}
+
 // ---- 全国拼合完成：展示、消失、进入下一局 ----
 function startFinale(b) {
   Composite.remove(engine.world, b);
@@ -603,9 +617,7 @@ function startFinale(b) {
   addScore(10000);
   banners.length = 0;
   popups.length = 0;
-  shakeStart = null; shakeX = 0; shaking = false; kicked2 = true;
-  for (const w of [walls.left, walls.right]) Body.setPosition(w, { x: w === walls.left ? WALL_X0[0] : WALL_X0[1], y: w.position.y });
-  Body.setPosition(walls.floor, { x: W / 2, y: walls.floor.position.y });
+  resetShake();          // 摇动可能正在进行的途中完成拼图：这里要连墙一起复位
   updateButtons();
 }
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -638,6 +650,7 @@ function startRound() {
   deck = freshDeck();
   dropped = 0; dealt = 0; lastDropAt = simTime; completed = new Set();
   stuck = new Map(); pending.length = 0;
+  resetShake();          // 上一局可能是在摇动中拼完的：墙必须回到原位，否则新方块一进场就被推到边上
   current = null;
   next = drawFromDeck();
   nextAt = simTime + ROUND_MS;
@@ -1621,6 +1634,19 @@ window.__cnPack = {
   get simTime() { return simTime; },
   get endInfo() { return endInfo; },
   get lastFinish() { return lastFinish; },
+  get shakeX() { return shakeX; },
+  get shaking() { return shaking; },
+  get simNow() { return simTime; },
+  // 供离线检查：三面墙当前的横坐标（摇动是直接挪墙实现的，这里用来确认复位）
+  get wallXs() {
+    return {
+      left: walls.left.position.x,
+      right: walls.right.position.x,
+      floor: walls.floor.position.x,
+    };
+  },
+  // 供离线检查：三面墙应在的位置
+  get wallBaseXs() { return { left: WALL_X0[0], right: WALL_X0[1], floor: W / 2 }; },
   setHoverX(x) { hoverX = x; },
   // 供离线检查：给定悬停 x，返回该方块会被放置到的原点
   hoverAt(x) { hoverX = x; return hoverPos(current.piece); },
@@ -1731,5 +1757,7 @@ window.__cnPack = {
     startFinale(b);
     return piece.codes.length;
   },
+  // 供离线检查：触发一次摇动（和点「摇一摇」等价）
+  startShake,
   drop, startGame, step,
 };
