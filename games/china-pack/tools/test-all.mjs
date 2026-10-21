@@ -15,6 +15,7 @@ const NODE = process.execPath;
 
 const ALL = [
   { name: 'verify', time: 'few s', what: 'pack, adjacency, regions, merge rules, difficulty' },
+  { name: 'verify-standard-map', time: '~20 s', what: '标准地图：岛屿、四极、争议段、国界界标、铺满' },
   { name: 'verify-deadlock', time: 'few s', what: '京津冀 / 粤港澳 grouping' },
   { name: 'verify-islands', time: '~1 min', what: 'strait crossings actually merge' },
   { name: 'verify-shake', time: 'few s', what: 'a shake never leaks into the next round' },

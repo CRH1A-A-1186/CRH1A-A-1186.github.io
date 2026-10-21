@@ -98,13 +98,35 @@ console.log('provinces:', provinces.length);
 const ISLAND_MIN_KM2 = 400;              // keep Zhoushan/Chongming/Hainan-scale islands
 const ISLAND_MAX_DEG = 4.0;              // and only within ~450 km of it
 
+// 国家标准地图 marks a handful of islands that are far below the 400 km2 island threshold but
+// belong to a province and must not be missing: 钓鱼岛 and 赤尾屿 (台湾), 东沙群岛 and the 三沙
+// features (永兴岛 is the seat of 三沙市, 太平岛 is the largest 南沙 island, 黄岩岛 and 曾母暗沙
+// are marked on every standard map - 曾母暗沙 is the southernmost point of the country). They are
+// listed explicitly instead of lowering the area threshold everywhere, which would scatter
+// invisible specks over every coastal province.
+const STANDARD_ISLANDS = [
+  { name: '钓鱼岛', lon: 123.47, lat: 25.74, code: 710000 },
+  { name: '赤尾屿', lon: 124.56, lat: 25.92, code: 710000 },
+  { name: '东沙群岛', lon: 116.72, lat: 20.70, code: 440000 },
+  { name: '永兴岛', lon: 112.33, lat: 16.83, code: 460000 },
+  { name: '太平岛', lon: 114.37, lat: 10.38, code: 460000 },
+  { name: '黄岩岛', lon: 117.75, lat: 15.15, code: 460000 },
+  { name: '曾母暗沙', lon: 112.28, lat: 3.98, code: 460000 },
+];
+const STANDARD_TOL_DEG = 0.35;           // a ring whose centre lands this close is that feature
+
+// Any island whose longer side is under this renders as less than a game unit and would be
+// invisible, so it is grown about its centre to a legible symbol - what paper maps do. This
+// affects the standard-map islands above and the 三沙 set; ordinary islands are already large.
+const ISLAND_MIN_SYMBOL_KM = 14;
+
 // 三沙市 is administered by 海南 and consists entirely of the South China Sea islands, so 海南 has to
 // keep them or the province is missing a city. Two things decide which pieces qualify:
 //
 //  * not everything in this entry is land. It also carries reefs and shoals encoded as polygons
 //    (曾母暗沙, 万安滩 ...) plus the nine-dash segments, some of them thousands of km2. Real islands
-//    in the South China Sea top out at ~4.6 km2 (太平岛), so a 40 km2 ceiling keeps the actual
-//    islands and drops the reef polygons, which should not be drawn as territory anyway.
+//    in the South China Sea top out at ~4.6 km2 (太平岛). The 3-40 km2 band keeps the true islands
+//    and drops the reef polygons - except for the named features above, which are kept as symbols.
 //  * at their true positions the islands are sub-pixel at the game's scale and stretch the piece
 //    over 53% of the box height while showing almost nothing - invisible geometry that still
 //    collides. So 三沙 is drawn as an inset just south of the main island, keeping the relative
@@ -114,30 +136,63 @@ const SANDSHA_MIN_KM2 = 3;
 const SANDSHA_MAX_KM2 = 40;
 const SANDSHA_INSET_GAP = 90;            // km between the main island and the inset
 const SANDSHA_INSET_WIDTH = 210;         // km, about the width of the main island
-// The real islands are 1-4.6 km2, i.e. under a third of a game unit wide - they would render as
-// nothing at all. Maps solve this by drawing an island symbol at a legible minimum size, so each
-// island is grown about its centre until its longer side reaches this. The three groups stay
-// distinguishable; what is lost is the exact island outline, which is below the map's resolution.
-const SANDSHA_MIN_SYMBOL_KM = 14;
+const SANDSHA_MIN_SYMBOL_KM = ISLAND_MIN_SYMBOL_KM;
+
+// grow a ring about its centre so its longer side reaches `minKm`
+function growToSymbol(ring, minKm) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of ring) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const longer = Math.max(x1 - x0, y1 - y0);
+  if (longer >= minKm || longer < 1e-6) return ring;
+  const mul = minKm / longer;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  return ring.map(([x, y]) => [cx + (x - cx) * mul, cy + (y - cy) * mul]);
+}
 
 for (const p of provinces) {
   const rings = [];
   for (const poly of p.polys) {
     const outer = poly[0];
-    if (outer.length < 5) continue;
-    rings.push({ ring: outer, km2: ringAreaKm2(outer) });
+    // 88 rings in the data are closed triangles (3 corners + the repeated first point): every one
+    // of them is a small island. They are kept in the pool so a standard-map feature such as 赤尾屿
+    // can still be matched, but the ordinary pass skips them so they do not add invisible specks.
+    rings.push({ ring: outer, km2: ringAreaKm2(outer), short: outer.length < 5 });
   }
   rings.sort((a, b) => b.km2 - a.km2);
   const main = rings[0];
   const mc = polyCentroid(lonLatRing(main.ring));
-  const keep = [main];
   const wantSansha = p.code === 460000;
+
+  // Each standard-map feature is matched to the single nearest ring, not to "any ring inside a
+  // box": the 西沙 islets sit within a few km of each other, so a box would label four of them
+  // 永兴岛 and still miss 赤尾屿.
+  const namedOf = new Map();                 // ring index -> feature name
+  for (const s of STANDARD_ISLANDS) {
+    if (s.code !== p.code) continue;
+    let best = -1, bestD = Infinity;
+    for (let i = 1; i < rings.length; i++) {
+      const [cx, cy] = polyCentroid(lonLatRing(rings[i].ring));
+      const d = Math.hypot(cx / KX - s.lon, -cy / KY - s.lat);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best > 0 && bestD <= STANDARD_TOL_DEG) namedOf.set(best, s.name);
+    else console.log(`  ! ${p.name}: ${s.name} not found within ${STANDARD_TOL_DEG}° (nearest ${bestD.toFixed(2)}°)`);
+  }
+
+  const keep = [main];
   const sansha = [];
   for (let i = 1; i < rings.length; i++) {
     const r = rings[i];
     const [cx, cy] = polyCentroid(lonLatRing(r.ring));
-    const dLat = Math.abs(cy - mc[1]) / KY;            // degrees of latitude from the main island
     const dDeg = Math.hypot(cx - mc[0], cy - mc[1]) / KX;
+    const named = namedOf.get(i);
+    if (named) {
+      // a feature the standard map marks is kept whatever its size
+      if (wantSansha && dDeg > ISLAND_MAX_DEG) sansha.push({ ...r, named });
+      else keep.push({ ...r, named });
+      continue;
+    }
+    if (r.short) continue;                              // degenerate triangles: only via the table above
     if (wantSansha && dDeg > ISLAND_MAX_DEG && r.km2 >= SANDSHA_MIN_KM2 && r.km2 <= SANDSHA_MAX_KM2) {
       sansha.push(r);                                  // collected, then placed as an inset
       continue;
@@ -179,11 +234,22 @@ for (const p of provinces) {
           moved[q][1] = ccy + (moved[q][1] - ccy) * mul;
         }
       }
-      keep.push({ ring: toLonLat(moved), km2: r.km2 });
+      keep.push({ ring: toLonLat(moved), km2: r.km2, named: r.named });
     });
     console.log(`  海南: ${sansha.length} 三沙 岛 drawn as an inset ${Math.round(targetW)} km wide ` +
       `(${(k * 100).toFixed(0)}% of true scale), ${Math.round(h * k)} km tall`);
   }
+
+  // a kept standard-map island is far too small to see at game scale, so draw it as a symbol
+  for (const r of keep) {
+    if (!r.named) continue;
+    const km = r.ring.map(([lon, lat]) => [lon * KX, -lat * KY]);
+    r.ring = growToSymbol(km, ISLAND_MIN_SYMBOL_KM).map(([x, y]) => [x / KX, -y / KY]);
+  }
+  const namedKept = keep.filter((r) => r.named).map((r) => r.named);
+  if (namedKept.length) console.log(`  ${p.name}: 标准图地物 ${namedKept.join('、')}`);
+  p.named = namedKept;                                 // audited by tools/verify-standard-map.mjs
+
   p.rings = keep;
   p.km2 = keep.reduce((a, r) => a + r.km2, 0);
   p.mainKm2 = main.km2;
@@ -434,6 +500,8 @@ fs.writeFileSync(OUT_JSON, JSON.stringify({
     code: p.code, name: p.name, km2: +p.km2.toFixed(1), mainKm2: +p.mainKm2.toFixed(1),
     cx: +p.cx.toFixed(1), cy: +p.cy.toFixed(1), aproj: +p.aproj.toFixed(1),
     verts: p.verts,
+    // the standard-map features this province is required to show, so the audit can check them
+    ...(p.named && p.named.length ? { named: p.named } : {}),
     rings: p.pts.map((r) => r.map(([x, y]) => [+x.toFixed(1), +y.toFixed(1)])),
   })),
   adj,
